@@ -13,14 +13,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export interface DailyScrape {
-  id?: number;
+  id?: string;
+  farm_id?: string;
   farm_name: string;
-  scraped_date: string; // YYYY-MM-DD
-  kwh_produced: number;
-  kwh_expected: number;
-  system_status: string;
-  performance_ratio: number;
-  raw_html?: string;
+  system_name?: string;
+  capacity_kw?: number;
+  scrape_date: string; // YYYY-MM-DD
+  scrape_time?: string;
+  kwh: number; // Daily production in kWh
+  kwh_expected?: number;
+  status?: string;
+  scraper_notes?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -128,6 +131,74 @@ export async function getScrapesByDateRange(
 
   if (error) {
     console.error('Failed to query date range:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get today's scrape data for all farms
+ */
+export async function getTodayAllFarms(date: string): Promise<DailyScrape[]> {
+  const { data, error } = await supabase
+    .from('daily_scrape')
+    .select('*')
+    .eq('scrape_date', date)
+    .order('farm_id', { ascending: true });
+
+  if (error) {
+    console.error('Failed to query all farms for date:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Recipient interface
+ */
+export interface RecipientPreference {
+  id: string;
+  role: 'management' | 'technician';
+  recipient_name: string;
+  recipient_email: string;
+  farm_ids?: string[] | null;
+  active: boolean;
+}
+
+/**
+ * Get all active recipients
+ */
+export async function getActiveRecipients(): Promise<RecipientPreference[]> {
+  const { data, error } = await supabase
+    .from('recipient_preferences')
+    .select('*')
+    .eq('active', true)
+    .order('role', { ascending: true })
+    .order('recipient_name', { ascending: true });
+
+  if (error) {
+    console.error('Failed to query recipients:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get recipients by role
+ */
+export async function getRecipientsByRole(role: 'management' | 'technician'): Promise<RecipientPreference[]> {
+  const { data, error } = await supabase
+    .from('recipient_preferences')
+    .select('*')
+    .eq('role', role)
+    .eq('active', true)
+    .order('recipient_name', { ascending: true });
+
+  if (error) {
+    console.error('Failed to query recipients by role:', error);
     return [];
   }
 

@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # Hourly scraper: runs continuously, scrapes every hour 6 AM - 6 PM EAT
+  fontana-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fontana-scraper
+    restart: unless-stopped
+    environment:
+      # SolarWeb credentials
+      - SOLARWEB_USERNAME=${SOLARWEB_USERNAME}
+      - SOLARWEB_PASSWORD=${SOLARWEB_PASSWORD}
+
+      # Farm-specific overrides (optional)
+      - AYANA_SOLARWEB_USERNAME=${AYANA_SOLARWEB_USERNAME:-}
+      - AYANA_SOLARWEB_PASSWORD=${AYANA_SOLARWEB_PASSWORD:-}
+      - AKINA_SOLARWEB_USERNAME=${AKINA_SOLARWEB_USERNAME:-}
+      - AKINA_SOLARWEB_PASSWORD=${AKINA_SOLARWEB_PASSWORD:-}
+      - BIGFLOWERS_SOLARWEB_USERNAME=${BIGFLOWERS_SOLARWEB_USERNAME:-}
+      - BIGFLOWERS_SOLARWEB_PASSWORD=${BIGFLOWERS_SOLARWEB_PASSWORD:-}
+
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+
+      # Zoho Mail (for email delivery)
+      - ZOHO_RECIPIENT_EMAIL=${ZOHO_RECIPIENT_EMAIL:-evert@greenspark.co.ke}
+      - ZOHO_MAIL_FROM=${ZOHO_MAIL_FROM:-evert@greenspark.co.ke}
+
+      # Timezone (EAT = UTC+3)
+      - TZ=Africa/Nairobi
+
+    command: node dist/scheduler/hourly-scraper.js
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('OK')"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    networks:
+      - fontana-network
+
+  # Aggregation job: runs daily at midnight
+  fontana-aggregate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fontana-aggregate
+    restart: unless-stopped
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - TZ=Africa/Nairobi
+
+    # Run once daily at midnight, then exit
+    command: >
+      sh -c "
+      echo 'Waiting for 00:00 daily...' &&
+      while true; do
+        HOUR=\$(date +%H:%M)
+        if [ \"\$HOUR\" = \"00:00\" ]; then
+          node dist/scheduler/aggregate-data.js
+          sleep 3600
+        fi
+        sleep 60
+      done
+      "
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    networks:
+      - fontana-network
+
+  # Cleanup job: runs daily at 1 AM
+  fontana-cleanup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fontana-cleanup
+    restart: unless-stopped
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - TZ=Africa/Nairobi
+
+    # Run once daily at 1 AM, then exit
+    command: >
+      sh -c "
+      echo 'Waiting for 01:00 daily...' &&
+      while true; do
+        HOUR=\$(date +%H:%M)
+        if [ \"\$HOUR\" = \"01:00\" ]; then
+          node dist/scheduler/cleanup-old-data.js
+          sleep 3600
+        fi
+        sleep 60
+      done
+      "
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    networks:
+      - fontana-network
+
+  # Email generation: runs daily at 12 noon EAT
+  fontana-email:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fontana-email
+    restart: unless-stopped
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - ZOHO_RECIPIENT_EMAIL=${ZOHO_RECIPIENT_EMAIL:-evert@greenspark.co.ke}
+      - TZ=Africa/Nairobi
+
+    # Run once daily at 12 noon, then exit
+    command: >
+      sh -c "
+      echo 'Waiting for 12:00 daily...' &&
+      while true; do
+        HOUR=\$(date +%H:%M)
+        if [ \"\$HOUR\" = \"12:00\" ]; then
+          node dist/scheduler/email-generator.js
+          sleep 3600
+        fi
+        sleep 60
+      done
+      "
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    networks:
+      - fontana-network
+
+networks:
+  fontana-network:
+    driver: bridge

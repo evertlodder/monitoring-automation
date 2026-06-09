@@ -1,4 +1,4 @@
-import { ScraperResult } from '../scraper/playwright-scraper.js';
+import { ScraperResult, Inverter } from '../scraper/playwright-scraper.js';
 
 /**
  * Format status indicator based on system production
@@ -17,31 +17,77 @@ function formatStatusIndicator(status: string, kwhProduced: number, kwhExpected:
 }
 
 /**
- * Render daily tech message in plain text format
- * Per SOW spec: simple format with status, kWh values
+ * Format inverter status as simple ON/OFFLINE
  */
-export function renderDailyTechMessage(data: ScraperResult, date: string): string {
-  const statusIndicator = formatStatusIndicator(data.system_status, data.kwh_produced, data.kwh_expected);
+function formatInverterStatus(inverter: Inverter, offlineDays?: number): string {
+  if (inverter.kw > 0) {
+    return '🟢 ON';
+  } else {
+    if (offlineDays && offlineDays > 0) {
+      return `🔴 OFFLINE (${offlineDays} day${offlineDays > 1 ? 's' : ''} offline)`;
+    }
+    return '🔴 OFFLINE';
+  }
+}
 
-  // Performance percentage
-  const performancePercent =
-    data.kwh_expected > 0 ? Math.round((data.kwh_produced / data.kwh_expected) * 100) : 0;
+/**
+ * Format inverter line with simple numbering and status
+ */
+function formatInverterLine(inverter: Inverter & { offlineDays?: number }, index: number): string {
+  const status = formatInverterStatus(inverter, inverter.offlineDays);
+  const kwDisplay = inverter.kw > 0 ? `${inverter.kw.toFixed(2)} kW` : '0 kW';
+  return `  - Inverter ${index + 1}: ${kwDisplay} [${status}]`;
+}
 
+/**
+ * Render daily tech message in plain text format
+ * Per SOW spec: simple format with status, kWh values, and inverter details
+ */
+export function renderDailyTechMessage(data: ScraperResult & { allSystems?: any[] }, date: string): string {
   const lines = [
     `FONTANA ALISHA — Daily Status Report`,
     `Date: ${date}`,
     ``,
-    `System Status:`,
-    statusIndicator,
-    ``,
-    `Production:`,
-    `Today produced: ${data.kwh_produced.toFixed(2)} kWh`,
-    `Expected: ${data.kwh_expected.toFixed(2)} kWh`,
-    `Performance: ${performancePercent}%`,
-    ``,
-    `Details:`,
-    `Performance ratio: ${data.performance_ratio.toFixed(2)}%`,
   ];
+
+  // If multi-system data is available, show each system with inverters
+  if (data.allSystems && data.allSystems.length > 0) {
+    lines.push(`System Status:`);
+    let totalProducing = 0;
+
+    data.allSystems.forEach((system: any) => {
+      const indicator = system.status === 'PRODUCING' ? '✅' : '❌';
+      lines.push(`${indicator} ${system.name}: ${system.kwh.toFixed(2)} kWh`);
+
+      // Show inverters if available
+      if (system.inverters && system.inverters.length > 0) {
+        system.inverters.forEach((inverter: Inverter, index: number) => {
+          lines.push(formatInverterLine(inverter, index));
+        });
+      }
+
+      if (system.status === 'PRODUCING') totalProducing++;
+      lines.push(``);
+    });
+
+    lines.push(`Summary:`);
+    lines.push(`Total systems: ${data.allSystems.length}`);
+    lines.push(`Producing: ${totalProducing}/${data.allSystems.length}`);
+    lines.push(`Total production: ${data.kwh_produced.toFixed(2)} kWh`);
+  } else {
+    // Fallback for single system
+    const statusIndicator = formatStatusIndicator(data.system_status, data.kwh_produced, data.kwh_expected);
+    const performancePercent =
+      data.kwh_expected > 0 ? Math.round((data.kwh_produced / data.kwh_expected) * 100) : 0;
+
+    lines.push(`System Status:`);
+    lines.push(statusIndicator);
+    lines.push(``);
+    lines.push(`Production:`);
+    lines.push(`Today produced: ${data.kwh_produced.toFixed(2)} kWh`);
+    lines.push(`Expected: ${data.kwh_expected.toFixed(2)} kWh`);
+    lines.push(`Performance: ${performancePercent}%`);
+  }
 
   return lines.join('\n');
 }

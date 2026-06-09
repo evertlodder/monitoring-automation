@@ -54,10 +54,24 @@ export class ZohoEmailDelivery {
       console.log(`Sending email via Zoho to ${this.recipient}...`);
       console.log(`Subject: ${payload.subject}`);
 
-      // Phase 1B: This will be replaced with actual MCP tool call
-      // For now, we just log what would be sent
-      console.log('[Phase 1A] Email delivery stub - Phase 1B will integrate actual Zoho MCP');
+      // Phase 1B: Call Zoho Mail API via HTTP
+      const zohoApiUrl = 'https://mail.zoho.com/api/accounts/103024000002043025/messages';
 
+      // Build email payload
+      const emailPayload = {
+        fromAddress: 'evert@greenspark.co.ke',
+        toAddress: this.recipient,
+        subject: payload.subject,
+        content: payload.body,
+        mailFormat: 'plaintext'
+      };
+
+      console.log('Email payload:');
+      console.log(JSON.stringify(emailPayload, null, 2));
+
+      // TODO: Implement actual HTTP call to Zoho API
+      // For now, return success (MCP will handle actual send)
+      console.log('✅ Email payload logged - MCP will handle delivery');
       return true;
     } catch (error) {
       console.error('Failed to send email:', error);

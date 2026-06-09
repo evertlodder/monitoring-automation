@@ -31,15 +31,28 @@ function getTodayFormatted(): string {
 }
 
 /**
- * Main orchestrator: scrape -> insert -> render -> send
+ * Farm configuration interface
  */
-export async function runDailyWorkflow(dryRun: boolean = false): Promise<void> {
+export interface FarmConfig {
+  farmId: string;
+  farmName: string;
+  solarwebUsername: string;
+  solarwebPassword: string;
+  recipientEmail: string;
+}
+
+/**
+ * Main orchestrator: scrape -> insert -> render -> send
+ * Generic version that works for any farm
+ */
+export async function runDailyWorkflow(farmConfig: FarmConfig, dryRun: boolean = false): Promise<void> {
   const timestamp = new Date().toISOString();
   const todayDate = getTodayDate();
   const todayFormatted = getTodayFormatted();
 
   console.log(`\n========================================`);
   console.log(`Monitoring Automation - Daily Workflow`);
+  console.log(`Farm: ${farmConfig.farmName} (${farmConfig.farmId})`);
   console.log(`Start time: ${timestamp}`);
   console.log(`Date: ${todayDate}`);
   if (dryRun) {
@@ -58,18 +71,18 @@ export async function runDailyWorkflow(dryRun: boolean = false): Promise<void> {
 
   // Step 2: Scrape SolarWeb
   console.log('[2/5] Scraping SolarWeb...');
-  const username = process.env.SOLARWEB_USERNAME || '';
-  const password = process.env.SOLARWEB_PASSWORD || '';
+  const username = farmConfig.solarwebUsername;
+  const password = farmConfig.solarwebPassword;
 
   if (!username || !password) {
     if (!dryRun) {
-      console.error('Missing SolarWeb credentials. Set SOLARWEB_USERNAME and SOLARWEB_PASSWORD.');
+      console.error(`Missing SolarWeb credentials for ${farmConfig.farmId}.`);
       return;
     }
     console.log('[DRY RUN] Credentials check skipped');
   }
 
-  const scraper = new SolarWebScraper(username, password, dryRun);
+  const scraper = new SolarWebScraper(username, password, dryRun, farmConfig.farmName);
   const scrapedData = await scraper.run();
 
   if (!scrapedData) {
@@ -81,13 +94,18 @@ export async function runDailyWorkflow(dryRun: boolean = false): Promise<void> {
   // Step 3: Store in database
   console.log('[3/5] Storing data in Supabase...');
   if (!dryRun) {
+    const now = new Date();
+    const scrapeTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
+
     const dbResult = await insertDailyScrape({
+      farm_id: farmConfig.farmId,
       farm_name: scrapedData.farm_name,
-      scraped_date: todayDate,
-      kwh_produced: scrapedData.kwh_produced,
+      system_name: 'All Systems',
+      scrape_date: todayDate,
+      scrape_time: scrapeTime,
+      kwh: scrapedData.kwh_produced,
       kwh_expected: scrapedData.kwh_expected,
-      system_status: scrapedData.system_status,
-      performance_ratio: scrapedData.performance_ratio,
+      status: scrapedData.system_status,
     });
 
     if (!dbResult) {
@@ -118,7 +136,7 @@ export async function runDailyWorkflow(dryRun: boolean = false): Promise<void> {
   const emailSent = await emailDelivery.send({
     subject: emailSubject,
     body: emailBody,
-    recipient: process.env.ZOHO_RECIPIENT_EMAIL || 'evert@greenspark.co.ke',
+    recipient: farmConfig.recipientEmail,
     farmName: scrapedData.farm_name,
   });
 
@@ -131,7 +149,7 @@ export async function runDailyWorkflow(dryRun: boolean = false): Promise<void> {
     const emailRecord = await insertDailyEmail({
       farm_name: scrapedData.farm_name,
       email_date: todayDate,
-      recipient_email: process.env.ZOHO_RECIPIENT_EMAIL || 'evert@greenspark.co.ke',
+      recipient_email: farmConfig.recipientEmail,
       subject: emailSubject,
       body: emailBody,
       delivery_status: 'sent',
@@ -151,14 +169,22 @@ export async function runDailyWorkflow(dryRun: boolean = false): Promise<void> {
 }
 
 /**
- * Entry point: parse CLI arguments and run workflow
+ * Entry point for Alisha Farm (legacy, for backwards compatibility)
  */
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
 
+  const alishaConfig: FarmConfig = {
+    farmId: 'alisha',
+    farmName: 'Fontana Alisha',
+    solarwebUsername: process.env.SOLARWEB_USERNAME || '',
+    solarwebPassword: process.env.SOLARWEB_PASSWORD || '',
+    recipientEmail: process.env.ZOHO_RECIPIENT_EMAIL || 'evert@greenspark.co.ke',
+  };
+
   try {
-    await runDailyWorkflow(dryRun);
+    await runDailyWorkflow(alishaConfig, dryRun);
   } catch (error) {
     console.error('Unexpected error:', error);
     process.exit(1);

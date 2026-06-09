@@ -6,7 +6,7 @@
  */
 
 export const SOLARWEB_URLS = {
-  LOGIN: 'https://www.solarweb.com/User/Login',
+  LOGIN: 'https://www.solarweb.com/Account/ExternalLogin',
   DASHBOARD: 'https://www.solarweb.com/SolarWebPublic/Dashboard',
 };
 
@@ -23,9 +23,10 @@ export const SOLARWEB_SELECTORS = {
 
   /**
    * Daily kWh produced - the main metric we're scraping
-   * Look for a value that shows today's production (e.g., "2.45 kWh")
+   * Discovered 2026-06-08: span.savings-value.js-savings-value
+   * Example HTML: <span class="savings-value js-savings-value">554.75</span>
    */
-  KWH_PRODUCED: '[data-metric="daily-production"]',
+  KWH_PRODUCED: 'span.savings-value.js-savings-value',
 
   /**
    * Expected/forecast kWh for the day
@@ -94,4 +95,28 @@ export const MOCK_SOLARWEB_DATA = {
   kwh_expected: 52.50,
   system_status: 'PRODUCING',
   performance_ratio: 86.15,
+  allSystems: [
+    {
+      name: 'Office',
+      kwh: 45.23,
+      status: 'PRODUCING',
+      inverters: [
+        { name: 'Symo 20.0-3-M (1)', kw: 16.843, percentage: 71, color: 'green' as const, status: 'OPTIMAL' as const },
+        { name: 'Symo 20.0-3-M (2)', kw: 16.867, percentage: 71, color: 'green' as const, status: 'OPTIMAL' as const },
+        { name: 'Symo 20.0-3-M (3)', kw: 11.513, percentage: 55, color: 'yellow' as const, status: 'UNDERPERFORMING' as const },
+      ],
+    },
+    {
+      name: 'Gate',
+      kwh: 0,
+      status: 'NOT_PRODUCING',
+      inverters: [],
+    },
+    {
+      name: 'Rootstock',
+      kwh: 0,
+      status: 'NOT_PRODUCING',
+      inverters: [],
+    },
+  ],
 };
