@@ -13,7 +13,7 @@ export const supabase = createClient(
   process.env.SUPABASE_ANON_KEY,
   {
     realtime: {
-      transport: ws,
+      transport: ws as any,
     },
   }
 );
