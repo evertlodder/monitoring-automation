@@ -66,16 +66,18 @@ export async function generateEmails(dryRun: boolean = false): Promise<EmailToSe
 
     console.log(`✅ Found data for ${new Set(allFarmData.map((f) => f.farm_id)).size} farms\n`);
 
-    // Step 2: Get active recipients
-    console.log('[2/3] Fetching recipient preferences...');
-    const recipients = await getActiveRecipients();
+    // Step 2: Use hardcoded recipients
+    console.log('[2/3] Setting up recipients...');
+    const recipients: RecipientPreference[] = [
+      {
+        recipient_name: 'Evert (Management)',
+        recipient_email: 'evert@greenspark.co.ke',
+        role: 'management',
+        farm_ids: null,
+      } as RecipientPreference
+    ];
 
-    if (!recipients || recipients.length === 0) {
-      console.error('No active recipients configured. Aborting.');
-      return [];
-    }
-
-    console.log(`✅ Found ${recipients.length} active recipients\n`);
+    console.log(`✅ Using ${recipients.length} recipient(s)\n`);
 
     // Step 3: Generate emails per recipient
     console.log('[3/3] Generating emails...');
