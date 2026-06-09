@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -33,9 +34,9 @@ export class ZohoEmailDelivery {
   }
 
   /**
-   * Send email via Zoho Mail (Phase 1B)
+   * Send email via Zoho Mail (Phase 1B - SMTP)
    *
-   * Writes email as HTML file for manual Zoho webmail delivery
+   * Uses nodemailer with Zoho Mail SMTP
    */
   async send(payload: EmailPayload): Promise<boolean> {
     if (this.dryRun) {
@@ -46,54 +47,33 @@ export class ZohoEmailDelivery {
     }
 
     try {
-      // Write email as HTML file
-      const date = new Date().toISOString().split('T')[0];
-      const timestamp = Date.now();
-      const filename = `/tmp/email-${date}-${timestamp}.html`;
+      // Configure nodemailer with Zoho SMTP
+      const transporter = nodemailer.createTransport({
+        host: process.env.ZOHO_SMTP_HOST || 'smtp.zoho.com',
+        port: parseInt(process.env.ZOHO_SMTP_PORT || '587'),
+        secure: false,
+        auth: {
+          user: process.env.ZOHO_MAIL_USER || 'evert@greenspark.co.ke',
+          pass: process.env.ZOHO_MAIL_PASSWORD || process.env.SOLARWEB_PASSWORD
+        }
+      });
 
-      const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${payload.subject}</title>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background: #f9f9f9; }
-    .email-container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .header { background: #f5f5f5; padding: 20px; margin-bottom: 20px; border-left: 4px solid #4CAF50; }
-    .header p { margin: 8px 0; }
-    .header strong { color: #333; }
-    .header em { color: #666; }
-    .content { white-space: pre-wrap; font-family: 'Courier New', monospace; background: #fafafa; padding: 20px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto; }
-    .footer { color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }
-  </style>
-</head>
-<body>
-  <div class="email-container">
-    <div class="header">
-      <p><strong>To:</strong> <em>${this.recipient}</em></p>
-      <p><strong>From:</strong> <em>evert@greenspark.co.ke</em></p>
-      <p><strong>Subject:</strong> <em>${payload.subject}</em></p>
-    </div>
-    <div class="content">${payload.body.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
-    <div class="footer">
-      <p>📧 <strong>Email generated for manual delivery via Zoho webmail</strong></p>
-      <p>1. Copy the content above (Ctrl+A / Cmd+A)</p>
-      <p>2. Open <a href="https://mail.zoho.com">Zoho Mail</a></p>
-      <p>3. Click "Compose"</p>
-      <p>4. Paste content into the message body</p>
-      <p>5. Click Send</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      // Create HTML email
+      const htmlBody = `<html><body><pre style="font-family: monospace; white-space: pre-wrap;">${payload.body.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`;
 
-      fs.writeFileSync(filename, htmlContent);
-      console.log(`✅ Email saved to: ${filename}`);
-      console.log(`📧 Open this file in a web browser to view the formatted email`);
-      console.log(`📋 Copy the content and paste into Zoho Mail composer`);
+      // Send email
+      const info = await transporter.sendMail({
+        from: process.env.ZOHO_MAIL_FROM || 'evert@greenspark.co.ke',
+        to: this.recipient,
+        subject: payload.subject,
+        text: payload.body,
+        html: htmlBody
+      });
+
+      console.log(`✅ Email sent! Message ID: ${info.messageId}`);
       return true;
     } catch (error) {
-      console.error('Failed to write email file:', error);
+      console.error('Failed to send email via SMTP:', error);
       return false;
     }
   }
