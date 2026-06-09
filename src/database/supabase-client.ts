@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import WebSocket from 'ws';
+
+// Enable WebSocket for Node.js environment
+(global as any).WebSocket = WebSocket;
 
 dotenv.config();
 
