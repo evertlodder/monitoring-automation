@@ -1,30 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import WebSocket from 'ws';
+import ws from 'ws';
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   throw new Error('Missing Supabase credentials in environment variables');
 }
 
-// Enable ws transport for Supabase Realtime in Node.js
-(global as any).WebSocket = WebSocket;
-
-// Configure Supabase with realtime support
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
+export const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY,
+  {
+    realtime: {
+      transport: ws,
     },
-  },
-  db: {
-    schema: 'public',
-  },
-});
+  }
+);
 
 export interface DailyScrape {
   id?: string;
