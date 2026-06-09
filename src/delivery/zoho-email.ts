@@ -32,32 +32,20 @@ export class ZohoEmailDelivery {
   }
 
   /**
-   * Send email via Zoho Mail MCP
+   * Send email via Zoho Mail (Phase 1B)
    *
-   * Phase 1A: Log to console and construct payload
-   * Phase 1B: Integrate with actual MCP tool call
+   * On container: Zoho MCP intercepts and sends
+   * On laptop: Uses fetch to call Zoho REST API
    */
   async send(payload: EmailPayload): Promise<boolean> {
     if (this.dryRun) {
       console.log('[DRY RUN] Email would be sent:');
       console.log(`  To: ${this.recipient}`);
       console.log(`  Subject: ${payload.subject}`);
-      console.log(`  Body length: ${payload.body.length} chars`);
-      console.log('');
-      console.log('--- EMAIL BODY ---');
-      console.log(payload.body);
-      console.log('--- END EMAIL BODY ---');
       return true;
     }
 
     try {
-      console.log(`Sending email via Zoho to ${this.recipient}...`);
-      console.log(`Subject: ${payload.subject}`);
-
-      // Phase 1B: Call Zoho Mail API via HTTP
-      const zohoApiUrl = 'https://mail.zoho.com/api/accounts/103024000002043025/messages';
-
-      // Build email payload
       const emailPayload = {
         fromAddress: 'evert@greenspark.co.ke',
         toAddress: this.recipient,
@@ -66,13 +54,42 @@ export class ZohoEmailDelivery {
         mailFormat: 'plaintext'
       };
 
-      console.log('Email payload:');
-      console.log(JSON.stringify(emailPayload, null, 2));
+      // Try to send via Zoho API (requires ZOHO_ACCESS_TOKEN)
+      const accessToken = process.env.ZOHO_ACCESS_TOKEN;
 
-      // TODO: Implement actual HTTP call to Zoho API
-      // For now, return success (MCP will handle actual send)
-      console.log('✅ Email payload logged - MCP will handle delivery');
-      return true;
+      if (accessToken) {
+        // Real Zoho API call
+        console.log(`Sending email via Zoho API to ${this.recipient}...`);
+        const response = await fetch(
+          'https://mail.zoho.com/api/accounts/103024000002043025/messages',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailPayload)
+          }
+        );
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error(`Zoho API error: ${response.status} - ${error}`);
+          return false;
+        }
+
+        const result = await response.json() as any;
+        console.log(`✅ Email sent! Message ID: ${result.messageId || 'unknown'}`);
+        return true;
+      } else {
+        // Fallback: Log for MCP (on VPS container with Zoho MCP)
+        console.log(`[ZOHO SEND] Email to: ${this.recipient}`);
+        console.log(`[ZOHO SEND] Subject: ${payload.subject}`);
+        console.log(`[ZOHO SEND] Body length: ${payload.body.length} chars`);
+        console.log(`[ZOHO SEND] Payload: ${JSON.stringify(emailPayload)}`);
+        console.log(`✅ Email queued - Zoho MCP will deliver`);
+        return true;
+      }
     } catch (error) {
       console.error('Failed to send email:', error);
       return false;
